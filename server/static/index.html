@@ -1,0 +1,782 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>eSysSim Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+<style>
+:root {
+  --bg: #0a0a0c;
+  --bg-card: #18181f;
+  --border: #22222a;
+  --text: #e8e8ec;
+  --text-dim: #8a8a94;
+  --primary: #f8993a;
+  --primary-glow: rgba(244, 104, 11, 0.5);
+  --success: #4ae24a;
+  --error: #e24a4a;
+  --radius: 12px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+header {
+  background: var(--primary);
+  padding: 16px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+header h1 {
+  font-size: 1.4rem;
+  color: #fff;
+  letter-spacing: 0.05em;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+/* Simulation list */
+.sim-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.sim-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.sim-card:hover { border-color: var(--primary); }
+.sim-card.active { border-color: var(--primary); box-shadow: 0 0 20px var(--primary-glow); }
+
+.sim-info { display: flex; flex-direction: column; gap: 4px; }
+.sim-id { font-weight: 600; font-size: 1rem; }
+.sim-meta { font-size: 0.85rem; color: var(--text-dim); }
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.status-running { background: rgba(74, 226, 74, 0.15); color: var(--success); }
+.status-stopped { background: rgba(138, 138, 148, 0.15); color: var(--text-dim); }
+.status-completed { background: rgba(248, 153, 58, 0.15); color: var(--primary); }
+.status-error { background: rgba(226, 74, 74, 0.15); color: var(--error); }
+
+.btn {
+  padding: 10px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+.btn-primary:hover { background: #e88830; }
+
+.btn-outline {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+
+.btn-sm { padding: 6px 14px; font-size: 0.8rem; }
+
+.btn-danger {
+  background: rgba(226, 74, 74, 0.15);
+  color: var(--error);
+  border: 1px solid rgba(226, 74, 74, 0.3);
+}
+
+.btn-danger:hover { background: rgba(226, 74, 74, 0.25); }
+
+/* Create form */
+.create-form {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 24px;
+  display: flex;
+  gap: 16px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.form-group label {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.form-group input, .form-group select {
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text);
+  font-size: 0.9rem;
+  width: 140px;
+}
+
+.form-group input:focus, .form-group select:focus {
+  outline: none;
+  border-color: var(--primary);
+}
+
+/* Dashboard */
+.dashboard { display: none; }
+.dashboard.visible { display: block; }
+
+.dashboard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.dashboard-header h2 { font-size: 1.2rem; }
+
+.dashboard-stats {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  min-width: 160px;
+}
+
+.stat-label { font-size: 0.75rem; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; }
+.stat-value { font-size: 1.5rem; font-weight: 700; margin-top: 4px; }
+.stat-unit { font-size: 0.8rem; color: var(--text-dim); }
+
+.charts-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(500px, 1fr));
+  gap: 20px;
+}
+
+.chart-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.chart-card h3 {
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.chart-card canvas {
+  width: 100% !important;
+  height: 250px !important;
+}
+
+.window-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.window-control label {
+  font-size: 0.8rem;
+  color: var(--text-dim);
+}
+
+.window-control input {
+  width: 80px;
+  padding: 4px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 0.85rem;
+}
+
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: 0.9rem;
+  margin-bottom: 16px;
+}
+
+.back-btn:hover { color: var(--primary); }
+
+.error-msg {
+  background: rgba(226, 74, 74, 0.1);
+  border: 1px solid rgba(226, 74, 74, 0.3);
+  color: var(--error);
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+@media (max-width: 768px) {
+  .charts-grid { grid-template-columns: 1fr; }
+  .create-form { flex-direction: column; }
+  .form-group input { width: 100%; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>eSysSim Monitor</h1>
+  <button class="btn btn-outline btn-sm" onclick="refreshList()">Refresh</button>
+</header>
+
+<div class="container">
+  <!-- Simulation List View -->
+  <div id="listView">
+    <div class="create-form">
+      <div class="form-group">
+        <label>Scenario</label>
+        <select id="scenario">
+          <option value="base_case">base_case</option>
+          <option value="base_case2">base_case2</option>
+          <option value="datacenter_1">datacenter_1</option>
+          <option value="datacenter_2">datacenter_2</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Resolution (s)</label>
+        <input type="number" id="resolution" value="10" min="1" step="1">
+      </div>
+      <div class="form-group">
+        <label>Duration (s)</label>
+        <input type="number" id="duration" value="300" min="10" step="10">
+      </div>
+      <div class="form-group">
+        <label>Time Scale</label>
+        <input type="number" id="timescale" value="3600" min="1" step="100">
+      </div>
+      <button class="btn btn-primary" onclick="createSimulation()">Start Simulation</button>
+    </div>
+
+    <h2 style="margin-bottom: 16px; font-size: 1rem; color: var(--text-dim);">Simulations</h2>
+    <div class="sim-list" id="simList"></div>
+  </div>
+
+  <!-- Dashboard View -->
+  <div class="dashboard" id="dashboard">
+    <button class="back-btn" onclick="showList()">&#8592; Back to simulations</button>
+    <div class="dashboard-header">
+      <h2 id="dashTitle">Simulation</h2>
+      <button class="btn btn-danger btn-sm" onclick="stopSimulation()">Stop</button>
+    </div>
+
+    <div id="errorMsg" class="error-msg" style="display: none;"></div>
+    <div id="warnMsg" class="error-msg" style="display: none; background: rgba(248, 153, 58, 0.1); border-color: rgba(248, 153, 58, 0.3); color: var(--primary);"></div>
+
+    <div class="dashboard-stats" id="dashStats"></div>
+
+    <div class="window-control">
+      <label>History window (s):</label>
+      <input type="number" id="windowSec" value="300" min="10" max="3600" onchange="updateWindow()">
+    </div>
+
+    <div class="charts-grid" id="chartsGrid"></div>
+  </div>
+</div>
+
+<script>
+let currentSimId = null;
+let eventSource = null;
+let charts = {};
+let historyData = [];
+let windowSec = 300;
+let sseClosed = false;
+
+const chartColors = ['#f8993a', '#4ae24a', '#4a9ae2', '#e24a4a', '#e2c44a', '#c44ae2', '#4ae2c4'];
+
+async function refreshList() {
+  const res = await fetch('/api/simulations');
+  const sims = await res.json();
+  const list = document.getElementById('simList');
+
+  if (sims.length === 0) {
+    list.innerHTML = '<p style="color: var(--text-dim);">No simulations yet.</p>';
+    return;
+  }
+
+  list.innerHTML = sims.map(s => `
+    <div class="sim-card ${s.id === currentSimId ? 'active' : ''}" onclick="openSimulation('${s.id}')">
+      <div class="sim-info">
+        <span class="sim-id">${s.id} — ${s.scenario}</span>
+        <span class="sim-meta">
+          Freq: ${s.resolution_freq}s | Duration: ${s.duration_sec}s | Scale: ${s.time_scale}x | Elapsed: ${s.sim_elapsed}s
+          ${s.sim_time ? '| Time: ' + s.sim_time.replace('T', ' ').substring(0, 19) : ''}
+        </span>
+        ${s.error ? '<span style="color: var(--error); font-size: 0.8rem;">Error: ' + s.error + '</span>' : ''}
+        ${s.warnings && s.warnings.length ? '<span style="color: var(--primary); font-size: 0.8rem;">⚠ Missing classes: ' + s.warnings.join(', ') + '</span>' : ''}
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="status-badge status-${s.status}">${s.status}</span>
+        ${['completed', 'stopped', 'error'].includes(s.status) ? `<button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteSimulation('${s.id}')" title="Delete">✕</button>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function createSimulation() {
+  const scenario = document.getElementById('scenario').value;
+  const resolution = parseFloat(document.getElementById('resolution').value);
+  const duration = parseFloat(document.getElementById('duration').value);
+  const timescale = parseFloat(document.getElementById('timescale').value);
+
+  const res = await fetch(`/api/simulations?resolution_freq=${resolution}&duration_sec=${duration}&time_scale=${timescale}&scenario=${scenario}`, {
+    method: 'POST'
+  });
+
+  if (res.ok) {
+    const sim = await res.json();
+    openSimulation(sim.id);
+  } else {
+    alert('Failed to create simulation');
+  }
+}
+
+async function stopSimulation() {
+  if (!currentSimId) return;
+  await fetch(`/api/simulations/${currentSimId}/stop`, { method: 'POST' });
+  refreshList();
+}
+
+async function deleteSimulation(simId) {
+  await fetch(`/api/simulations/${simId}`, { method: 'DELETE' });
+  if (currentSimId === simId) {
+    showList();
+  }
+  refreshList();
+}
+
+function showList() {
+  if (eventSource) {
+    eventSource.close();
+    eventSource = null;
+  }
+  currentSimId = null;
+  document.getElementById('listView').style.display = 'block';
+  document.getElementById('dashboard').classList.remove('visible');
+  refreshList();
+}
+
+async function openSimulation(simId) {
+  currentSimId = simId;
+  document.getElementById('listView').style.display = 'none';
+  document.getElementById('dashboard').classList.add('visible');
+  document.getElementById('dashTitle').textContent = `Simulation ${simId}`;
+  document.getElementById('errorMsg').style.display = 'none';
+  document.getElementById('warnMsg').style.display = 'none';
+
+  historyData = [];
+  Object.values(charts).forEach(c => c.destroy());
+  charts = {};
+
+  const simRes = await fetch(`/api/simulations/${simId}`);
+  const sim = await simRes.json();
+  if (sim.warnings && sim.warnings.length) {
+    const warnEl = document.getElementById('warnMsg');
+    warnEl.textContent = '⚠ Missing model classes: ' + sim.warnings.join(', ') + '. These elements will be ignored.';
+    warnEl.style.display = 'block';
+  }
+
+  const res = await fetch(`/api/simulations/${simId}/history?window=${windowSec}`);
+  historyData = await res.json();
+
+  buildCharts();
+  connectSSE(simId);
+}
+
+function connectSSE(simId) {
+  if (eventSource) eventSource.close();
+  sseClosed = false;
+  eventSource = new EventSource(`/api/simulations/${simId}/stream`);
+
+  eventSource.addEventListener('snapshot', (e) => {
+    if (sseClosed) return;
+    const snapshot = JSON.parse(e.data);
+    historyData.push(snapshot);
+
+    const cutoff = snapshot.sim_elapsed - windowSec;
+    historyData = historyData.filter(d => d.sim_elapsed >= cutoff);
+
+    updateCharts(snapshot);
+    updateStats(snapshot);
+
+    if (snapshot.error) {
+      const errEl = document.getElementById('errorMsg');
+      errEl.textContent = snapshot.error;
+      errEl.style.display = 'block';
+    }
+  });
+
+  eventSource.addEventListener('status', (e) => {
+    const data = JSON.parse(e.data);
+    if (data.status === 'completed') {
+      sseClosed = true;
+      eventSource.close();
+      eventSource = null;
+    }
+    refreshList();
+  });
+
+  eventSource.onerror = () => {
+    sseClosed = true;
+    eventSource.close();
+    eventSource = null;
+    refreshList();
+  };
+}
+
+function buildCharts() {
+  const grid = document.getElementById('chartsGrid');
+  grid.innerHTML = `
+    <div class="chart-card">
+      <h3>Bus Voltages (pu)</h3>
+      <canvas id="chartBus"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Load Power (MW)</h3>
+      <canvas id="chartLoad"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Grid Power (MW) & Prices ($/MWh)</h3>
+      <canvas id="chartGrid"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Battery Power (MW) & SOC (pu)</h3>
+      <canvas id="chartBattery"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Generator Power (MW)</h3>
+      <canvas id="chartGen"></canvas>
+    </div>
+    <div class="chart-card">
+      <h3>Line Flow (MW)</h3>
+      <canvas id="chartLine"></canvas>
+    </div>
+  `;
+
+  const baseOpts = {
+    responsive: true,
+    maintainAspectRatio: false,
+    animation: false,
+    interaction: { mode: 'nearest', axis: 'xy', intersect: false },
+    plugins: {
+      legend: { labels: { color: '#8a8a94', font: { size: 11 } } },
+      tooltip: {
+        enabled: true,
+        mode: 'nearest',
+        intersect: false,
+        filter: (item, index) => index === 0,
+        callbacks: {
+          label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(4)}`
+        }
+      }
+    },
+    scales: {
+      x: {
+        type: 'linear',
+        title: { display: true, text: 'Time (s)', color: '#8a8a94' },
+        ticks: { color: '#8a8a94' },
+        grid: { color: 'rgba(255,255,255,0.05)' }
+      },
+      y: {
+        ticks: { color: '#8a8a94' },
+        grid: { color: 'rgba(255,255,255,0.05)' }
+      }
+    }
+  };
+
+  charts.bus = new Chart(document.getElementById('chartBus'), {
+    type: 'line',
+    data: { datasets: [] },
+    options: { ...baseOpts, scales: { ...baseOpts.scales, y: { ...baseOpts.scales.y, title: { display: true, text: 'Voltage (pu)', color: '#8a8a94' } } } }
+  });
+
+  charts.load = new Chart(document.getElementById('chartLoad'), {
+    type: 'line',
+    data: { datasets: [] },
+    options: { ...baseOpts, scales: { ...baseOpts.scales, y: { ...baseOpts.scales.y, title: { display: true, text: 'Power (MW)', color: '#8a8a94' } } } }
+  });
+
+  charts.grid = new Chart(document.getElementById('chartGrid'), {
+    type: 'line',
+    data: { datasets: [] },
+    options: {
+      ...baseOpts,
+      scales: {
+        x: baseOpts.scales.x,
+        y: {
+          position: 'left',
+          title: { display: true, text: 'Power (MW)', color: chartColors[0] },
+          ticks: { color: chartColors[0] },
+          grid: { color: 'rgba(255,255,255,0.05)' }
+        },
+        y1: {
+          position: 'right',
+          title: { display: true, text: 'Price ($/MWh)', color: chartColors[3] },
+          ticks: { color: chartColors[3] },
+          grid: { drawOnChartArea: false }
+        }
+      }
+    }
+  });
+
+  charts.line = new Chart(document.getElementById('chartLine'), {
+    type: 'line',
+    data: { datasets: [] },
+    options: { ...baseOpts, scales: { ...baseOpts.scales, y: { ...baseOpts.scales.y, title: { display: true, text: 'Flow (MW)', color: '#8a8a94' } } } }
+  });
+
+  charts.battery = new Chart(document.getElementById('chartBattery'), {
+    type: 'line',
+    data: { datasets: [] },
+    options: {
+      ...baseOpts,
+      scales: {
+        x: baseOpts.scales.x,
+        y: {
+          position: 'left',
+          title: { display: true, text: 'Power (MW)', color: chartColors[0] },
+          ticks: { color: chartColors[0] },
+          grid: { color: 'rgba(255,255,255,0.05)' }
+        },
+        y1: {
+          position: 'right',
+          title: { display: true, text: 'SOC (pu)', color: chartColors[2] },
+          ticks: { color: chartColors[2] },
+          grid: { drawOnChartArea: false },
+          min: 0,
+          max: 1
+        }
+      }
+    }
+  });
+
+  charts.gen = new Chart(document.getElementById('chartGen'), {
+    type: 'line',
+    data: { datasets: [] },
+    options: { ...baseOpts, scales: { ...baseOpts.scales, y: { ...baseOpts.scales.y, title: { display: true, text: 'Power (MW)', color: '#8a8a94' } } } }
+  });
+
+  updateCharts({});
+}
+
+function updateCharts(snapshot) {
+  const busDatasets = [];
+  const loadDatasets = [];
+  const gridDatasets = [];
+  const lineDatasets = [];
+  const batteryDatasets = [];
+  const genDatasets = [];
+
+  const busNames = Object.keys(historyData[0]?.buses || {});
+  const loadNames = Object.keys(historyData[0]?.loads || {});
+  const gridNames = Object.keys(historyData[0]?.grids || {});
+  const lineNames = Object.keys(historyData[0]?.lines || {});
+  const batteryNames = Object.keys(historyData[0]?.batteries || {});
+  const genNames = Object.keys(historyData[0]?.generators || {});
+
+  busNames.forEach((name, i) => {
+    busDatasets.push({
+      label: name,
+      data: historyData.map(d => ({ x: d.sim_elapsed, y: d.buses[name]?.vm_pu })),
+      borderColor: chartColors[i % chartColors.length],
+      tension: 0.1,
+      pointRadius: 0,
+    });
+  });
+
+  loadNames.forEach((name, i) => {
+    loadDatasets.push({
+      label: name,
+      data: historyData.map(d => ({ x: d.sim_elapsed, y: d.loads[name]?.p_mw })),
+      borderColor: chartColors[i % chartColors.length],
+      tension: 0.1,
+      pointRadius: 0,
+    });
+  });
+
+  gridNames.forEach((name, i) => {
+    gridDatasets.push({
+      label: `${name} P (MW)`,
+      data: historyData.map(d => ({ x: d.sim_elapsed, y: d.grids[name]?.p_mw })),
+      borderColor: chartColors[i % chartColors.length],
+      yAxisID: 'y',
+      tension: 0.1,
+      pointRadius: 0,
+    });
+    gridDatasets.push({
+      label: `${name} Price ($/MWh)`,
+      data: historyData.map(d => ({ x: d.sim_elapsed, y: d.grids[name]?.purchase_price })),
+      borderColor: chartColors[(i + 3) % chartColors.length],
+      borderDash: [5, 5],
+      yAxisID: 'y1',
+      tension: 0.1,
+      pointRadius: 0,
+    });
+  });
+
+  lineNames.forEach((name, i) => {
+    lineDatasets.push({
+      label: name,
+      data: historyData.map(d => ({ x: d.sim_elapsed, y: d.lines[name]?.p_from_mw })),
+      borderColor: chartColors[i % chartColors.length],
+      tension: 0.1,
+      pointRadius: 0,
+    });
+  });
+
+  batteryNames.forEach((name, i) => {
+    batteryDatasets.push({
+      label: `${name} P (MW)`,
+      data: historyData.map(d => ({ x: d.sim_elapsed, y: d.batteries[name]?.p_mw })),
+      borderColor: chartColors[i % chartColors.length],
+      yAxisID: 'y',
+      tension: 0.1,
+      pointRadius: 0,
+    });
+    batteryDatasets.push({
+      label: `${name} SOC (pu)`,
+      data: historyData.map(d => ({ x: d.sim_elapsed, y: d.batteries[name]?.soc_pu })),
+      borderColor: chartColors[(i + 2) % chartColors.length],
+      borderDash: [5, 5],
+      yAxisID: 'y1',
+      tension: 0.1,
+      pointRadius: 0,
+    });
+  });
+
+  genNames.forEach((name, i) => {
+    genDatasets.push({
+      label: name,
+      data: historyData.map(d => ({ x: d.sim_elapsed, y: d.generators[name]?.p_mw })),
+      borderColor: chartColors[(i + 4) % chartColors.length],
+      tension: 0.1,
+      pointRadius: 0,
+    });
+  });
+
+  charts.bus.data.datasets = busDatasets;
+  charts.bus.update('none');
+
+  charts.load.data.datasets = loadDatasets;
+  charts.load.update('none');
+
+  charts.grid.data.datasets = gridDatasets;
+  charts.grid.update('none');
+
+  charts.line.data.datasets = lineDatasets;
+  charts.line.update('none');
+
+  charts.battery.data.datasets = batteryDatasets;
+  charts.battery.update('none');
+
+  charts.gen.data.datasets = genDatasets;
+  charts.gen.update('none');
+
+  charts.line.data.datasets = lineDatasets;
+  charts.line.update('none');
+}
+
+function updateStats(snapshot) {
+  const stats = document.getElementById('dashStats');
+  const buses = snapshot.buses || {};
+  const loads = snapshot.loads || {};
+  const grids = snapshot.grids || {};
+  const batteries = snapshot.batteries || {};
+  const generators = snapshot.generators || {};
+
+  let html = '';
+  for (const [name, data] of Object.entries(buses)) {
+    html += `<div class="stat-card"><div class="stat-label">${name} Voltage</div><div class="stat-value">${data.vm_pu.toFixed(4)}</div><div class="stat-unit">pu</div></div>`;
+  }
+  for (const [name, data] of Object.entries(loads)) {
+    html += `<div class="stat-card"><div class="stat-label">${name} Power</div><div class="stat-value">${data.p_mw.toFixed(4)}</div><div class="stat-unit">MW</div></div>`;
+  }
+  for (const [name, data] of Object.entries(generators)) {
+    html += `<div class="stat-card"><div class="stat-label">${name} Power</div><div class="stat-value">${data.p_mw.toFixed(4)}</div><div class="stat-unit">MW</div></div>`;
+  }
+  for (const [name, data] of Object.entries(grids)) {
+    html += `<div class="stat-card"><div class="stat-label">${name} Power</div><div class="stat-value">${data.p_mw.toFixed(4)}</div><div class="stat-unit">MW</div></div>`;
+    html += `<div class="stat-card"><div class="stat-label">${name} Price</div><div class="stat-value">$${data.purchase_price.toFixed(2)}</div><div class="stat-unit">/MWh</div></div>`;
+  }
+  for (const [name, data] of Object.entries(batteries)) {
+    html += `<div class="stat-card"><div class="stat-label">${name} Power</div><div class="stat-value">${data.p_mw.toFixed(4)}</div><div class="stat-unit">MW</div></div>`;
+    html += `<div class="stat-card"><div class="stat-label">${name} SOC</div><div class="stat-value">${(data.soc_pu * 100).toFixed(1)}</div><div class="stat-unit">%</div></div>`;
+  }
+
+  stats.innerHTML = html;
+}
+
+function updateWindow() {
+  windowSec = parseFloat(document.getElementById('windowSec').value) || 300;
+}
+
+refreshList();
+setInterval(refreshList, 5000);
+</script>
+
+</body>
+</html>
