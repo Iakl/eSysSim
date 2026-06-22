@@ -107,8 +107,29 @@ class SimulationState:
         for w in self.warnings:
             warn_module.warn(f"Scenario '{os.path.basename(scenario_dir)}' uses class '{w}' which is not implemented in eSysSim. Data will be ignored.")
 
+        # Nominal thermal rating per line (MVA). Used to derive congestion
+        # (loading %) since pandapower impedance elements have no native
+        # loading_percent result column.
+        self.line_ratings = {
+            line["alias"]: (float(line.get("p_mw_max", 1.0)) or 1.0)
+            for line in ref.get("lines", [])
+        }
+
         self.controller: Controller = LocalController()
         self.remote_controller: Optional[RemoteController] = None
+
+    def _line_loading_percent(self, idx, imp_res) -> float:
+        name = self.net.impedance.at[idx, "name"]
+        rating = self.line_ratings.get(name, 1.0)
+        if rating <= 0:
+            rating = 1.0
+        p_from = float(imp_res.get("p_from_mw", imp_res.get("pft_mw", 0)))
+        q_from = float(imp_res.get("q_from_mvar", imp_res.get("qft_mvar", 0)))
+        p_to = float(imp_res.get("p_to_mw", imp_res.get("ptf_mw", 0)))
+        q_to = float(imp_res.get("q_to_mvar", imp_res.get("qtf_mvar", 0)))
+        s_from = (p_from ** 2 + q_from ** 2) ** 0.5
+        s_to = (p_to ** 2 + q_to ** 2) ** 0.5
+        return max(s_from, s_to) / rating * 100.0
 
     def start(self):
         if self.status == "running":
@@ -184,6 +205,7 @@ class SimulationState:
             measurements["lines"][name] = {
                 "p_from_mw": float(imp_res.get("p_from_mw", imp_res.get("pft_mw", 0))),
                 "p_to_mw": float(imp_res.get("p_to_mw", imp_res.get("ptf_mw", 0))),
+                "loading_percent": self._line_loading_percent(idx, imp_res),
             }
 
         for bat in self.ref.get("batteries", []):
@@ -328,7 +350,7 @@ class SimulationState:
             p_from = float(imp_res.get("p_from_mw", imp_res.get("pft_mw", 0)))
             snapshot["lines"][name] = {
                 "p_from_mw": p_from,
-                "loading_percent": float(imp_res.get("loading_percent", 0)),
+                "loading_percent": self._line_loading_percent(idx, imp_res),
             }
 
         for bat in self.ref.get("batteries", []):

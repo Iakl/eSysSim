@@ -515,6 +515,10 @@ function buildCharts() {
       <h3>Line Flow (MW)</h3>
       <canvas id="chartLine"></canvas>
     </div>
+    <div class="chart-card">
+      <h3>Line Congestion (loading %)</h3>
+      <canvas id="chartLineLoad"></canvas>
+    </div>
   `;
 
   const baseOpts = {
@@ -620,6 +624,12 @@ function buildCharts() {
     options: { ...baseOpts, scales: { ...baseOpts.scales, y: { ...baseOpts.scales.y, title: { display: true, text: 'Power (MW)', color: '#8a8a94' } } } }
   });
 
+  charts.lineLoad = new Chart(document.getElementById('chartLineLoad'), {
+    type: 'line',
+    data: { datasets: [] },
+    options: { ...baseOpts, scales: { ...baseOpts.scales, y: { ...baseOpts.scales.y, beginAtZero: true, suggestedMax: 100, title: { display: true, text: 'Loading (%)', color: '#8a8a94' } } } }
+  });
+
   updateCharts({});
 }
 
@@ -628,6 +638,7 @@ function updateCharts(snapshot) {
   const loadDatasets = [];
   const gridDatasets = [];
   const lineDatasets = [];
+  const lineLoadDatasets = [];
   const batteryDatasets = [];
   const genDatasets = [];
 
@@ -686,7 +697,30 @@ function updateCharts(snapshot) {
       tension: 0.1,
       pointRadius: 0,
     });
+    lineLoadDatasets.push({
+      label: name,
+      data: historyData.map(d => ({ x: d.sim_elapsed, y: d.lines[name]?.loading_percent })),
+      borderColor: chartColors[i % chartColors.length],
+      tension: 0.1,
+      pointRadius: 0,
+    });
   });
+
+  // Reference line at 100% (thermal limit / overload threshold)
+  if (lineNames.length && historyData.length) {
+    lineLoadDatasets.push({
+      label: 'Overload (100%)',
+      data: [
+        { x: historyData[0].sim_elapsed, y: 100 },
+        { x: historyData[historyData.length - 1].sim_elapsed, y: 100 },
+      ],
+      borderColor: '#e24a4a',
+      borderDash: [6, 4],
+      borderWidth: 1,
+      pointRadius: 0,
+      fill: false,
+    });
+  }
 
   batteryNames.forEach((name, i) => {
     batteryDatasets.push({
@@ -736,8 +770,8 @@ function updateCharts(snapshot) {
   charts.gen.data.datasets = genDatasets;
   charts.gen.update('none');
 
-  charts.line.data.datasets = lineDatasets;
-  charts.line.update('none');
+  charts.lineLoad.data.datasets = lineLoadDatasets;
+  charts.lineLoad.update('none');
 }
 
 function updateStats(snapshot) {
@@ -745,12 +779,19 @@ function updateStats(snapshot) {
   const buses = snapshot.buses || {};
   const loads = snapshot.loads || {};
   const grids = snapshot.grids || {};
+  const lines = snapshot.lines || {};
   const batteries = snapshot.batteries || {};
   const generators = snapshot.generators || {};
 
   let html = '';
   for (const [name, data] of Object.entries(buses)) {
     html += `<div class="stat-card"><div class="stat-label">${name} Voltage</div><div class="stat-value">${data.vm_pu.toFixed(4)}</div><div class="stat-unit">pu</div></div>`;
+  }
+  for (const [name, data] of Object.entries(lines)) {
+    if (data.loading_percent === undefined) continue;
+    const overloaded = data.loading_percent > 100;
+    const color = overloaded ? 'var(--error)' : 'var(--success)';
+    html += `<div class="stat-card"><div class="stat-label">${name} Loading</div><div class="stat-value" style="color: ${color}">${data.loading_percent.toFixed(1)}</div><div class="stat-unit">%</div></div>`;
   }
   for (const [name, data] of Object.entries(loads)) {
     html += `<div class="stat-card"><div class="stat-label">${name} Power</div><div class="stat-value">${data.p_mw.toFixed(4)}</div><div class="stat-unit">MW</div></div>`;
